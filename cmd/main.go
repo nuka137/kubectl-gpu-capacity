@@ -72,9 +72,50 @@ func (options *SampleOptions) Run() error {
         os.Exit(1)
     }
 
+    type NodeInfo struct {
+        NodeName string
+        CpuAllocatable int64
+        CpuRequested int64
+        GpuAllocatable int64
+        GpuRequested int64
+    }
+
+    var nodeInfo []NodeInfo
     for _, node := range nodes.Items {
-        cpu_capacity := node.Status.Capacity["cpu"]
-        fmt.Printf("[%s] cpu: %d\n", node.Name, cpu_capacity.Value())
+        pods, err := clientset.CoreV1().Pods("").List(context.TODO(), metav1.ListOptions{
+            FieldSelector: "spec.nodeName=" + node.Name,
+        })
+        if err != nil {
+            fmt.Print(err)
+            os.Exit(1)
+        }
+
+        info := &NodeInfo{}
+        info.NodeName = node.Name
+        info.CpuAllocatable = node.Status.Allocatable.Cpu().Value() * 1000
+
+        info.CpuRequested = 0
+        for _, pod := range pods.Items {
+            for _, container := range pod.Spec.Containers {
+                info.CpuRequested += container.Resources.Requests.Cpu().MilliValue()
+            }
+        }
+
+        nodeInfo = append(nodeInfo, *info)
+    }
+
+    var nodeNameStrings []string
+    var cpuRequestedStrings []string
+    var cpuAllocatableStrings []string
+    for _, info := range nodeInfo {
+        nodeNameStrings = append(nodeNameStrings, fmt.Sprintf("[%s]", info.NodeName))
+        cpuRequestedStrings = append(cpuRequestedStrings, fmt.Sprintf("%,2f", info.CpuRequested))
+        cpuAllocatableStrings = append(cpuAllocatableStrings, fmt.Sprintf("%.2f", info.CpuAllocatable))
+
+        fmt.Printf("[%s] cpu: %.2f %.2f\n",
+                   info.NodeName,
+                   float32(info.CpuRequested) / 1000.0,
+                   float32(info.CpuAllocatable) / 1000.0)
     }
 
     return nil
