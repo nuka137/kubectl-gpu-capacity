@@ -4,8 +4,10 @@ package main
 import (
     "context"
     "os"
+    "strings"
     "errors"
     "fmt"
+    "text/tabwriter"
 
     "github.com/spf13/pflag"
     "github.com/spf13/cobra"
@@ -104,19 +106,22 @@ func (options *SampleOptions) Run() error {
         nodeInfo = append(nodeInfo, *info)
     }
 
-    var nodeNameStrings []string
-    var cpuRequestedStrings []string
-    var cpuAllocatableStrings []string
+    writer := new(tabwriter.Writer)
+    writer.Init(os.Stdout, 0, 8, 0, '\t', 0)
     for _, info := range nodeInfo {
-        nodeNameStrings = append(nodeNameStrings, fmt.Sprintf("[%s]", info.NodeName))
-        cpuRequestedStrings = append(cpuRequestedStrings, fmt.Sprintf("%,2f", info.CpuRequested))
-        cpuAllocatableStrings = append(cpuAllocatableStrings, fmt.Sprintf("%.2f", info.CpuAllocatable))
+        num_meter_total := int(info.CpuAllocatable * 10.0 / 1000.0)
+        num_meter_used := int(info.CpuRequested * 10.0 / 1000.0)
 
-        fmt.Printf("[%s] cpu: %.2f %.2f\n",
-                   info.NodeName,
-                   float32(info.CpuRequested) / 1000.0,
-                   float32(info.CpuAllocatable) / 1000.0)
+        meter := strings.Repeat("+", num_meter_used) + strings.Repeat("-", num_meter_total - num_meter_used)
+
+        fmt.Fprintf(writer, "[%s]\t%.2f / %.2f\t%s\n",
+                    info.NodeName,
+                    float32(info.CpuRequested) / 1000.0,
+                    float32(info.CpuAllocatable) / 1000.0,
+                    meter)
     }
+    writer.Flush()
+
 
     return nil
 }
