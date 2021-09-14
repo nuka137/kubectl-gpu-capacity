@@ -4,7 +4,6 @@ package main
 import (
     "context"
     "os"
-    "strings"
     "errors"
     "fmt"
     "text/tabwriter"
@@ -76,8 +75,6 @@ func (options *SampleOptions) Run() error {
 
     type NodeInfo struct {
         NodeName string
-        CpuAllocatable int64
-        CpuRequested int64
         GpuAllocatable int64
         GpuRequested int64
     }
@@ -94,16 +91,14 @@ func (options *SampleOptions) Run() error {
 
         info := &NodeInfo{}
         info.NodeName = node.Name
-        info.CpuAllocatable = node.Status.Allocatable.Cpu().Value() * 1000
         gpuAlloc := node.Status.Allocatable["nvidia.com/gpu"]
         info.GpuAllocatable += gpuAlloc.Value()
 
-        info.CpuRequested = 0
+        info.GpuRequested = 0
         for _, pod := range pods.Items {
             for _, container := range pod.Spec.Containers {
                 gpuReq := container.Resources.Requests["nvidia.com/gpu"]
                 info.GpuRequested += gpuReq.Value()
-                info.CpuRequested += container.Resources.Requests.Cpu().MilliValue()
             }
         }
 
@@ -112,20 +107,12 @@ func (options *SampleOptions) Run() error {
 
     writer := new(tabwriter.Writer)
     writer.Init(os.Stdout, 0, 8, 0, '\t', 0)
-    fmt.Fprintf(writer, "NODE NAME\tGPU(Req/Alloc)\tCPU(Req/Alloc)\t\n")
+    fmt.Fprintf(writer, "NODE NAME\tGPU (Request/Total)\n")
     for _, info := range nodeInfo {
-        num_meter_total := int(info.CpuAllocatable / 1000.0)
-        num_meter_used := int(info.CpuRequested / 1000.0)
-
-        meter := strings.Repeat("+", num_meter_used) + strings.Repeat("-", num_meter_total - num_meter_used)
-
-        fmt.Fprintf(writer, "[%s]\t%d / %d\t%.2f / %.2f\t%s\n",
+        fmt.Fprintf(writer, "%s\t%d/%d\n",
                     info.NodeName,
                     info.GpuRequested,
-                    info.GpuAllocatable,
-                    float32(info.CpuRequested) / 1000.0,
-                    float32(info.CpuAllocatable) / 1000.0,
-                    meter)
+                    info.GpuAllocatable)
     }
     writer.Flush()
 
