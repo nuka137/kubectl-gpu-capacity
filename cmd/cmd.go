@@ -1,19 +1,15 @@
-package main
+package cmd
 
 
 import (
-    "context"
-    "os"
     "errors"
-    "fmt"
 
     "github.com/spf13/cobra"
 
-    metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
     "k8s.io/cli-runtime/pkg/genericclioptions"
     "k8s.io/client-go/kubernetes"
 
-    "github.com/nuka137/pkg/gpu"
+    gpu "github.com/nuka137/kubectl-gpu-capacity/pkg/gpu"
 )
 
 type CommandMode int
@@ -67,55 +63,28 @@ func (options *CommandOptions) Run() error {
 
     config, err := options.configFlags.ToRESTConfig()
     if err != nil {
-        fmt.Println(err)
-        os.Exit(1)
+        return err
     }
 
     clientset, err := kubernetes.NewForConfig(config)
     if err != nil {
-        fmt.Println(err)
-        os.Exit(1)
+        return err
     }
 
     if options.Mode == ShowCapacity {
+        info, err := gpu.GetNodeGpuInfo(clientset)
+        if err != nil {
+            return err
+        }
+        gpu.PrintNodeGpuInfo(info)
+    } else {
+        info, err := gpu.GetPodGpuInfo(clientset)
+        if err != nil {
+            return err
+        }
+        gpu.PrintPodGpuInfo(info)
     }
-
 
     return nil
 }
 
-func main() {
-
-    options := &CommandOptions{
-        configFlags: genericclioptions.NewConfigFlags(true),
-    }
-
-    rootCmd := &cobra.Command{
-        Use: "kubectl-gpu-capacity",
-        SilenceUsage: true,
-        RunE: func(cmd *cobra.Command, args []string) error {
-
-            if err := options.Complete(cmd, args); err != nil {
-                return err
-            }
-
-            if err := options.Validate(); err != nil {
-                return err
-            }
-
-            if err := options.Run(); err != nil {
-                return err
-            }
-
-            return nil
-        },
-    }
-
-    rootCmd.PersistentFlags().BoolVarP(&options.ShowAllocatedPods, "pods", "p", false, "Show GPU allocated pods")
-
-    //options.configFlags.AddFlags(rootCmd.Flags())
-
-    if err := rootCmd.Execute(); err != nil {
-        os.Exit(1)
-    }
-}

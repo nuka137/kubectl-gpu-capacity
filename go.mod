@@ -1,4 +1,4 @@
-module github.com/nuka137/kubectl-sample-plugin
+module github.com/nuka137/kubectl-gpu-capacity
 
 go 1.17
 
